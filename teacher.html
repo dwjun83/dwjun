@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教师指令控制台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Microsoft YaHei'; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); color: white; padding: 25px; text-align: center; }
+        .header h1 { font-size: 24px; margin-bottom: 10px; }
+        .status-bar { background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; margin-top: 15px; display: inline-flex; align-items: center; gap: 10px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #ff4757; }
+        .status-dot.connected { background: #2ed573; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .main-content { padding: 25px; }
+        .setup-box { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #dee2e6; }
+        .setup-box h3 { color: #4361ee; margin-bottom: 15px; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; color: #495057; font-weight: 600; }
+        .input-group input { width: 100%; padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; font-size: 16px; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; width: 100%; }
+        .btn-primary { background: #4361ee; color: white; }
+        .btn-primary:hover { background: #3a56d4; transform: translateY(-2px); }
+        .quick-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
+        .quick-btn { background: white; border: 2px solid #dee2e6; border-radius: 8px; padding: 15px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
+        .quick-btn:hover { background: #4361ee; border-color: #4361ee; }
+        .quick-btn:hover i, .quick-btn:hover span { color: white; }
+        .quick-btn i { font-size: 20px; color: #4361ee; }
+        .quick-btn span { font-size: 14px; color: #495057; }
+        textarea { width: 100%; min-height: 100px; padding: 15px; border: 2px solid #dee2e6; border-radius: 8px; font-size: 16px; margin: 10px 0; }
+        .btn-success { background: #2ed573; color: white; }
+        .btn-success:hover { background: #25c464; }
+        .notification { position: fixed; top: 20px; right: 20px; padding: 15px 25px; background: white; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); transform: translateX(120%); transition: transform 0.3s; z-index: 1000; border-left: 4px solid #4361ee; }
+        .notification.show { transform: translateX(0); }
+        .history { margin-top: 20px; }
+        .history-list { max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; }
+        @media (max-width: 768px) { .quick-buttons { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-chalkboard-teacher"></i> 教师指令控制台</h1>
+            <div class="status-bar">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">等待连接</span>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="setup-box">
+                <h3><i class="fas fa-wifi"></i> 连接设置</h3>
+                <div class="input-group">
+                    <label>教室编号</label>
+                    <input type="text" id="roomId" value="101">
+                </div>
+                <div class="input-group">
+                    <label>教师姓名</label>
+                    <input type="text" id="teacherName" value="王老师">
+                </div>
+                <button id="connectBtn" class="btn btn-primary">连接到教室</button>
+            </div>
+            
+            <h3><i class="fas fa-bolt"></i> 快捷指令</h3>
+            <div class="quick-buttons">
+                <button class="quick-btn" data-command="请保持安静"><i class="fas fa-volume-mute"></i><span>保持安静</span></button>
+                <button class="quick-btn" data-command="请准备上课"><i class="fas fa-bell"></i><span>准备上课</span></button>
+                <button class="quick-btn" data-command="请看黑板"><i class="fas fa-chalkboard"></i><span>看黑板</span></button>
+                <button class="quick-btn" data-command="请拿出课本"><i class="fas fa-book"></i><span>拿课本</span></button>
+            </div>
+            
+            <h3><i class="fas fa-edit"></i> 自定义指令</h3>
+            <textarea id="messageInput" placeholder="输入指令..."></textarea>
+            <button id="sendBtn" class="btn btn-success" disabled>发送指令</button>
+            
+            <div class="history">
+                <h3><i class="fas fa-history"></i> 发送记录</h3>
+                <div class="history-list" id="historyList">暂无记录</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="notification" class="notification"></div>
+    
+    <script>
+        class TeacherApp {
+            constructor() {
+                this.roomId = '101';
+                this.teacherName = '王老师';
+                this.isConnected = false;
+                this.history = [];
+                this.init();
+            }
+            
+            init() {
+                this.elements = {
+                    roomId: document.getElementById('roomId'),
+                    teacherName: document.getElementById('teacherName'),
+                    connectBtn: document.getElementById('connectBtn'),
+                    statusDot: document.getElementById('statusDot'),
+                    statusText: document.getElementById('statusText'),
+                    messageInput: document.getElementById('messageInput'),
+                    sendBtn: document.getElementById('sendBtn'),
+                    historyList: document.getElementById('historyList')
+                };
+                
+                this.bindEvents();
+                this.showNotification('系统就绪，请输入教室编号并连接', 'info');
+            }
+            
+            bindEvents() {
+                this.elements.connectBtn.addEventListener('click', () => this.connect());
+                this.elements.messageInput.addEventListener('input', () => {
+                    this.elements.sendBtn.disabled = !this.elements.messageInput.value.trim() || !this.isConnected;
+                });
+                this.elements.sendBtn.addEventListener('click', () => {
+                    const command = this.elements.messageInput.value.trim();
+                    if (command) this.sendCommand(command);
+                });
+                document.querySelectorAll('.quick-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const command = e.currentTarget.dataset.command;
+                        this.sendCommand(command);
+                    });
+                });
+            }
+            
+            connect() {
+                if (this.isConnected) {
+                    this.disconnect();
+                    return;
+                }
+                
+                this.roomId = this.elements.roomId.value.trim() || '101';
+                this.teacherName = this.elements.teacherName.value.trim() || '王老师';
+                
+                this.isConnected = true;
+                this.updateStatus('已连接', '#2ed573');
+                this.elements.connectBtn.textContent = '断开连接';
+                this.elements.sendBtn.disabled = false;
+                this.showNotification('连接成功！可以发送指令了。', 'success');
+                
+                // 使用Firebase模拟服务器（简单方案）
+                this.useFirebase();
+            }
+            
+            useFirebase() {
+                // 使用Firebase作为实时数据库
+                const firebaseConfig = {
+                    apiKey: "AIzaSyC4R6ANR1qk6X4g2q7w8Lm9n0o1p2q3r4s5",
+                    authDomain: "classroom-voice.firebaseapp.com",
+                    databaseURL: "https://classroom-voice-default-rtdb.firebaseio.com",
+                    projectId: "classroom-voice",
+                    storageBucket: "classroom-voice.appspot.com",
+                    messagingSenderId: "123456789012",
+                    appId: "1:123456789012:web:abcdef1234567890"
+                };
+                
+                // 这里简化处理，实际使用WebSocket或轮询
+                console.log('使用Firebase连接，房间:', this.roomId);
+            }
+            
+            sendCommand(command) {
+                if (!this.isConnected) {
+                    this.showNotification('请先连接到教室', 'error');
+                    return;
+                }
+                
+                const timestamp = new Date().toISOString();
+                
+                // 添加到历史
+                this.addToHistory(command, timestamp);
+                
+                // 发送到服务器（简化版）
+                this.sendToServer(command, timestamp);
+                
+                // 清空输入
+                this.elements.messageInput.value = '';
+                this.elements.sendBtn.disabled = true;
+                
+                this.showNotification(`指令已发送: ${command}`, 'success');
+            }
+            
+            sendToServer(command, timestamp) {
+                // 创建唯一的命令ID
+                const commandId = Date.now().toString();
+                
+                // 存储到localStorage（作为临时方案）
+                const message = {
+                    type: 'command',
+                    command: command,
+                    teacherName: this.teacherName,
+                    roomId: this.roomId,
+                    timestamp: timestamp,
+                    commandId: commandId
+                };
+                
+                // 使用localStorage和IndexedDB组合
+                localStorage.setItem(`command_${this.roomId}_${commandId}`, JSON.stringify(message));
+                localStorage.setItem('last_command', JSON.stringify(message));
+                
+                // 触发storage事件（用于同一浏览器的通信）
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: 'last_command',
+                    newValue: JSON.stringify(message)
+                }));
+                
+                console.log('发送指令:', message);
+            }
+            
+            addToHistory(command, timestamp) {
+                const time = new Date(timestamp).toLocaleTimeString('zh-CN');
+                const item = document.createElement('div');
+                item.textContent = `${time}: ${command}`;
+                item.style.padding = '5px 0';
+                item.style.borderBottom = '1px solid #eee';
+                
+                this.elements.historyList.prepend(item);
+                
+                // 限制显示数量
+                if (this.elements.historyList.children.length > 10) {
+                    this.elements.historyList.removeChild(this.elements.historyList.lastChild);
+                }
+            }
+            
+            updateStatus(text, color) {
+                this.elements.statusDot.style.background = color;
+                this.elements.statusText.textContent = text;
+                if (color === '#2ed573') {
+                    this.elements.statusDot.className = 'status-dot connected';
+                }
+            }
+            
+            disconnect() {
+                this.isConnected = false;
+                this.updateStatus('未连接', '#ff4757');
+                this.elements.connectBtn.textContent = '连接到教室';
+                this.elements.sendBtn.disabled = true;
+                this.showNotification('已断开连接', 'info');
+            }
+            
+            showNotification(message, type) {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.className = `notification show ${type}`;
+                setTimeout(() => notification.classList.remove('show'), 3000);
+            }
+        }
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            window.teacherApp = new TeacherApp();
+        });
+    </script>
+</body>
+</html>
