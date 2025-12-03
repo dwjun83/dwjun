@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教室语音播报</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei'; background: #000; color: white; height: 100vh; overflow: hidden; }
+        .classroom-display { width: 100vw; height: 100vh; background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; }
+        .header { position: absolute; top: 30px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 40px; }
+        .system-title { font-size: 2.2rem; color: #00dbde; text-shadow: 0 0 20px rgba(0,219,222,0.5); }
+        .current-time { font-size: 2rem; font-family: 'Courier New'; color: white; }
+        .message-container { max-width: 90%; margin: 0 auto; }
+        .message-icon { font-size: 6rem; color: #fc00ff; margin-bottom: 40px; animation: float 3s ease-in-out infinite; }
+        .message-text { font-size: 4.5rem; font-weight: bold; color: #00dbde; margin: 40px 0; min-height: 140px; text-shadow: 0 0 30px rgba(0,219,222,0.7); animation: textGlow 2s infinite alternate; }
+        .message-teacher { font-size: 2.5rem; color: #fc00ff; margin-top: 40px; padding: 20px 50px; background: rgba(252,0,255,0.1); border-radius: 20px; border: 3px solid rgba(252,0,255,0.3); }
+        .status-bar { position: absolute; bottom: 40px; left: 0; right: 0; text-align: center; font-size: 1.3rem; }
+        .status-indicator { display: inline-flex; align-items: center; gap: 12px; padding: 12px 25px; background: rgba(255,255,255,0.1); border-radius: 12px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #ff4757; }
+        .status-dot.connected { background: #2ed573; animation: pulse 1.5s infinite; }
+        .pulse-effect { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 0; height: 0; border-radius: 50%; background: rgba(0,219,222,0.1); z-index: 1; }
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-25px); } }
+        @keyframes textGlow { 0% { text-shadow: 0 0 20px rgba(0,219,222,0.7); transform: scale(1); } 100% { text-shadow: 0 0 40px rgba(0,219,222,0.9), 0 0 60px rgba(0,219,222,0.5); transform: scale(1.02); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        @keyframes pulse-effect { 0% { width: 0; height: 0; opacity: 1; } 100% { width: 1500px; height: 1500px; opacity: 0; } }
+        .setup-panel { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .setup-content { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px; border-radius: 20px; border: 2px solid #00dbde; max-width: 500px; width: 90%; text-align: center; }
+        .setup-input { width: 100%; padding: 18px; margin: 15px 0; border: 2px solid #00dbde; border-radius: 10px; background: rgba(0,0,0,0.5); color: white; font-size: 18px; text-align: center; }
+        .setup-btn { background: linear-gradient(135deg, #00dbde 0%, #fc00ff 100%); color: white; border: none; padding: 18px 40px; border-radius: 10px; font-size: 18px; cursor: pointer; margin-top: 20px; width: 100%; }
+        @media (max-width: 768px) { .system-title { font-size: 1.5rem; } .message-text { font-size: 2.5rem; } .message-teacher { font-size: 1.5rem; padding: 15px 30px; } .message-icon { font-size: 4rem; } }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="setup-panel" id="setupPanel">
+        <div class="setup-content">
+            <h2><i class="fas fa-broadcast-tower"></i> 教室语音播报系统</h2>
+            <div style="margin-bottom: 30px; color: rgba(255,255,255,0.8);">请输入教室编号</div>
+            <input type="text" id="roomIdInput" class="setup-input" value="101" placeholder="教室编号">
+            <button id="connectBtn" class="setup-btn"><i class="fas fa-plug"></i> 连接到教师</button>
+        </div>
+    </div>
+    
+    <div class="classroom-display" id="mainDisplay" style="display: none;">
+        <div class="pulse-effect" id="pulseEffect"></div>
+        <div class="header">
+            <div class="system-title"><i class="fas fa-broadcast-tower"></i> 教室语音播报系统</div>
+            <div class="current-time" id="currentTime">--:--:--</div>
+        </div>
+        <div class="message-container">
+            <div class="message-icon" id="messageIcon"><i class="fas fa-volume-up"></i></div>
+            <div class="message-text" id="messageText">等待指令...</div>
+            <div class="message-teacher" id="messageTeacher">发送人：等待连接</div>
+        </div>
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">等待连接</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        class ClassroomApp {
+            constructor() {
+                this.roomId = '101';
+                this.isConnected = false;
+                this.lastCommandId = null;
+                this.speechSynthesis = window.speechSynthesis;
+                this.init();
+            }
+            
+            init() {
+                this.elements = {
+                    setupPanel: document.getElementById('setupPanel'),
+                    mainDisplay: document.getElementById('mainDisplay'),
+                    roomIdInput: document.getElementById('roomIdInput'),
+                    connectBtn: document.getElementById('connectBtn'),
+                    currentTime: document.getElementById('currentTime'),
+                    messageText: document.getElementById('messageText'),
+                    messageIcon: document.getElementById('messageIcon'),
+                    messageTeacher: document.getElementById('messageTeacher'),
+                    statusDot: document.getElementById('statusDot'),
+                    statusText: document.getElementById('statusText'),
+                    pulseEffect: document.getElementById('pulseEffect')
+                };
+                
+                this.connectBtn.addEventListener('click', () => this.connect());
+                this.roomIdInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') this.connect();
+                });
+                
+                this.updateTime();
+                setInterval(() => this.updateTime(), 1000);
+            }
+            
+            connect() {
+                this.roomId = this.elements.roomIdInput.value.trim() || '101';
+                localStorage.setItem('classroom_roomId', this.roomId);
+                
+                this.elements.setupPanel.style.display = 'none';
+                this.elements.mainDisplay.style.display = 'flex';
+                
+                this.isConnected = true;
+                this.updateStatus('已连接', '#2ed573');
+                
+                this.startCheckingCommands();
+                this.enterFullscreen();
+                
+                // 显示欢迎消息
+                setTimeout(() => {
+                    this.showMessage('系统连接成功', '系统');
+                    this.speak('系统连接成功');
+                }, 1000);
+            }
+            
+            startCheckingCommands() {
+                setInterval(() => {
+                    this.checkForCommands();
+                }, 1000);
+            }
+            
+            checkForCommands() {
+                try {
+                    // 检查localStorage中的命令
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith('command_') && key.includes(this.roomId)) {
+                            const command = JSON.parse(localStorage.getItem(key));
+                            if (command.commandId !== this.lastCommandId) {
+                                this.handleCommand(command);
+                                this.lastCommandId = command.commandId;
+                                
+                                // 删除已处理的消息（可选）
+                                localStorage.removeItem(key);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('检查命令失败:', error);
+                }
+            }
+            
+            handleCommand(command) {
+                console.log('收到指令:', command);
+                
+                this.updateStatus('收到指令', '#2ed573');
+                this.showMessage(command.command, command.teacherName || '老师');
+                this.speak(command.command);
+                this.showPulseEffect();
+            }
+            
+            showMessage(text, teacher) {
+                this.elements.messageText.textContent = text;
+                this.elements.messageTeacher.textContent = `发送人：${teacher}`;
+                this.elements.messageIcon.innerHTML = '<i class="fas fa-broadcast-tower"></i>';
+                
+                this.elements.messageText.style.animation = 'none';
+                setTimeout(() => {
+                    this.elements.messageText.style.animation = 'textGlow 2s infinite alternate';
+                }, 10);
+            }
+            
+            speak(text) {
+                if (!this.speechSynthesis) return;
+                
+                this.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.9;
+                utterance.volume = 1.0;
+                
+                utterance.onstart = () => {
+                    this.elements.messageIcon.innerHTML = '<i class="fas fa-microphone-alt"></i>';
+                };
+                
+                utterance.onend = () => {
+                    this.elements.messageIcon.innerHTML = '<i class="fas fa-volume-up"></i>';
+                };
+                
+                this.speechSynthesis.speak(utterance);
+            }
+            
+            showPulseEffect() {
+                const pulse = this.elements.pulseEffect;
+                pulse.style.animation = 'none';
+                setTimeout(() => {
+                    pulse.style.animation = 'pulse-effect 2s ease-out';
+                }, 10);
+            }
+            
+            updateStatus(text, color) {
+                this.elements.statusDot.style.background = color;
+                this.elements.statusText.textContent = text;
+                if (color === '#2ed573') {
+                    this.elements.statusDot.className = 'status-dot connected';
+                }
+            }
+            
+            updateTime() {
+                const now = new Date();
+                this.elements.currentTime.textContent = now.toLocaleTimeString('zh-CN');
+            }
+            
+            enterFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(console.log);
+                }
+            }
+        }
+        
+        // 启动应用
+        function initApp() {
+            window.classroomApp = new ClassroomApp();
+            
+            // 检查是否已有保存的房间号
+            const savedRoomId = localStorage.getItem('classroom_roomId');
+            if (savedRoomId) {
+                window.classroomApp.elements.roomIdInput.value = savedRoomId;
+                setTimeout(() => window.classroomApp.connect(), 500);
+            }
+        }
+        
+        if (window.speechSynthesis) {
+            window.speechSynthesis.onvoiceschanged = initApp;
+            if (window.speechSynthesis.getVoices().length > 0) {
+                initApp();
+            } else {
+                setTimeout(initApp, 1000);
+            }
+        } else {
+            initApp();
+        }
+    </script>
+</body>
+</html>
